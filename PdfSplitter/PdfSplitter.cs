@@ -26,9 +26,9 @@ namespace PdfSplitter
             //SplitPdfsByPages(pagesWithKeyWord);
         }
 
-        public List<string> SplitByPages(List<int> pagesToSplit)
+        public List<string> SplitByPages(params int[] lastPageNumbers)
         {
-            throw new NotImplementedException();
+            return null;
         }
 
         public List<int> GetPagesWithKeyword(string keyword)

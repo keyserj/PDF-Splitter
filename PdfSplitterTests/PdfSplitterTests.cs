@@ -1,8 +1,9 @@
-﻿using iTextSharp.testutils;
+﻿using iTextSharp.text.pdf;
+using iTextSharp.text.pdf.parser;
 using PdfSplitter;
-using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using Xunit;
 
 namespace PdfSplitterTests
@@ -48,20 +49,19 @@ namespace PdfSplitterTests
         //    }
         //}
 
-        //[Fact]
-        //public void Split_by_pages()
-        //{
-        //    List<int> pagesToSplit = new List<int>() { 2, 5, 6 };
+        [Theory]
+        [InlineData(2, 5, 6)]
+        public void Split_by_pages(params int[] lastPageNumbers)
+        {
+            List<string> pathsToCreatedPdfs = _pdfSplitter.SplitByPages(lastPageNumbers);
 
-        //    try
-        //    {
-        //        List<string> pathsToCreatedPdfs = _pdfSplitter.SplitByPages(pagesToSplit);
-        //    }
-        //    finally
-        //    {
-        //        // cleanup
-        //    }
-        //}
+            for (int i = 0; i < lastPageNumbers.Length; i++)
+            {
+                int startPage = (i == 0) ? 1 : lastPageNumbers[i];
+                int lastPage = lastPageNumbers[i + 1];
+                AssertPdfsAreEqual(_pdfSplitter.InputFilePath, startPage, lastPage, pathsToCreatedPdfs[i]);
+            }
+        }
 
         [Theory]
         [InlineData(1, 2)]
@@ -70,32 +70,41 @@ namespace PdfSplitterTests
         {
             string pathToCreatedPdf = _pdfSplitter.CreateCopyForRange(startPage, endPage);
 
-            //try
-            //{
-            using (FileStream _ = File.OpenRead(pathToCreatedPdf))
-            {
+            AssertPdfsAreEqual(_pdfSplitter.InputFilePath, startPage, endPage, pathToCreatedPdf);
 
-            }
-
-            CompareTool compareTool = new CompareTool();
-            string comparison =
-                compareTool.Compare(
-                    pathToCreatedPdf,
-                    _pdfSplitter.InputFilePath,
-                    Resources.OutputDirectory,
-                    "diff");
-            Assert.Null(comparison);
-            //AssertPdfCreatedForPages(pathToCreatedPdf, startPage, endPage);
-            //}
-            //finally
-            //{
-            //    Cleanup(pathToCreatedPdf);
-            //}
+            DeleteCreatedDirectory();
         }
 
-        private void AssertPdfCreatedForPages(string pathToCreatedPdf, int startPage, int endPage)
+        private void DeleteCreatedDirectory()
         {
-            throw new NotImplementedException();
+            Directory.Delete(_pdfSplitter.OutputDirectory, recursive: true);
+        }
+
+        private void AssertPdfsAreEqual(string srcPdf, int srcStartPage, int srcEndPage, string destPdf)
+        {
+            string pdf1Text = GetPdfText(srcPdf, srcStartPage, srcEndPage);
+            string pdf2Text = GetPdfText(destPdf);
+            Assert.Equal(pdf1Text, pdf2Text);
+        }
+
+        private string GetPdfText(string path, int startPage = 1, int? endPage = null)
+        {
+            StringBuilder pdfText = new StringBuilder();
+
+            using (PdfReader pdfReader = new PdfReader(path))
+            {
+                if (endPage == null)
+                {
+                    endPage = pdfReader.NumberOfPages;
+                }
+
+                for (int page = startPage; page <= endPage; page++)
+                {
+                    pdfText.Append(PdfTextExtractor.GetTextFromPage(pdfReader, page));
+                }
+            }
+
+            return pdfText.ToString();
         }
     }
 }
