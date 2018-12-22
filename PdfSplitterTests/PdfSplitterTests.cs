@@ -1,6 +1,7 @@
 ﻿using iTextSharp.text.pdf;
 using iTextSharp.text.pdf.parser;
 using PdfSplitter;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -8,7 +9,7 @@ using Xunit;
 
 namespace PdfSplitterTests
 {
-    public class PdfSplitterTests
+    public class PdfSplitterTests : IDisposable
     {
         private readonly PdfSplitter.PdfSplitter _pdfSplitter;
 
@@ -17,6 +18,15 @@ namespace PdfSplitterTests
             string inputFilePath = Resources.PdfTestPath;
             string outputDirectory = Resources.OutputDirectory;
             _pdfSplitter = new PdfSplitter.PdfSplitter(inputFilePath, outputDirectory);
+        }
+
+        public void Dispose()
+        {
+            try
+            {
+                Directory.Delete(_pdfSplitter.OutputDirectory, recursive: true);
+            }
+            catch { } // if the test created a directory, delete it, but we don't care otherwise
         }
 
         [Fact]
@@ -34,33 +44,41 @@ namespace PdfSplitterTests
             Assert.DoesNotContain(4, pagesWithKeyword);
         }
 
-        //[Fact]
-        //public void Split_by_keyword()
-        //{
-        //    string keyword = "Adobe PDF Library customers";
-
-        //    try
-        //    {
-        //        List<string> pathsToCreatedPdfs = _pdfSplitter.SplitByKeyword(keyword);
-        //    }
-        //    finally
-        //    {
-        //        // cleanup
-        //    }
-        //}
-
-        [Theory]
-        [InlineData(2, 5, 6)]
-        public void Split_by_pages(params int[] lastPageNumbers)
+        [Fact]
+        public void Split_on_keyword()
         {
-            List<string> pathsToCreatedPdfs = _pdfSplitter.SplitByPages(lastPageNumbers);
+            string keyword = "Adobe PDF Library customers"; // appears on page 2, 5, and 6
 
-            for (int i = 0; i < lastPageNumbers.Length; i++)
-            {
-                int startPage = (i == 0) ? 1 : lastPageNumbers[i];
-                int lastPage = lastPageNumbers[i + 1];
-                AssertPdfsAreEqual(_pdfSplitter.InputFilePath, startPage, lastPage, pathsToCreatedPdfs[i]);
-            }
+            List<string> pathsToCreatedPdfs = _pdfSplitter.SplitOnKeyword(keyword);
+
+            AssertPdfsAreEqual(_pdfSplitter.InputFilePath, 1, 1, pathsToCreatedPdfs[0]);
+            AssertPdfsAreEqual(_pdfSplitter.InputFilePath, 2, 4, pathsToCreatedPdfs[1]);
+            AssertPdfsAreEqual(_pdfSplitter.InputFilePath, 5, 5, pathsToCreatedPdfs[2]);
+            AssertPdfsAreEqual(_pdfSplitter.InputFilePath, 6, 6, pathsToCreatedPdfs[3]);
+        }
+
+        [Fact]
+        public void Split_on_pages()
+        {
+            int[] pageNumbers = new int[] { 2, 3, 6 };
+            List<string> pathsToCreatedPdfs = _pdfSplitter.SplitOnPages(pageNumbers);
+
+            AssertPdfsAreEqual(_pdfSplitter.InputFilePath, 1, 1, pathsToCreatedPdfs[0]);
+            AssertPdfsAreEqual(_pdfSplitter.InputFilePath, 2, 2, pathsToCreatedPdfs[1]);
+            AssertPdfsAreEqual(_pdfSplitter.InputFilePath, 3, 5, pathsToCreatedPdfs[2]);
+            AssertPdfsAreEqual(_pdfSplitter.InputFilePath, 6, 6, pathsToCreatedPdfs[3]);
+        }
+
+        [Fact]
+        public void Split_on_pages_with_first_page_specified()
+        {
+            int[] pageNumbers = new int[] { 1, 2, 3, 6 };
+            List<string> pathsToCreatedPdfs = _pdfSplitter.SplitOnPages(pageNumbers);
+
+            AssertPdfsAreEqual(_pdfSplitter.InputFilePath, 1, 1, pathsToCreatedPdfs[0]);
+            AssertPdfsAreEqual(_pdfSplitter.InputFilePath, 2, 2, pathsToCreatedPdfs[1]);
+            AssertPdfsAreEqual(_pdfSplitter.InputFilePath, 3, 5, pathsToCreatedPdfs[2]);
+            AssertPdfsAreEqual(_pdfSplitter.InputFilePath, 6, 6, pathsToCreatedPdfs[3]);
         }
 
         [Theory]
@@ -71,13 +89,6 @@ namespace PdfSplitterTests
             string pathToCreatedPdf = _pdfSplitter.CreateCopyForRange(startPage, endPage);
 
             AssertPdfsAreEqual(_pdfSplitter.InputFilePath, startPage, endPage, pathToCreatedPdf);
-
-            DeleteCreatedDirectory();
-        }
-
-        private void DeleteCreatedDirectory()
-        {
-            Directory.Delete(_pdfSplitter.OutputDirectory, recursive: true);
         }
 
         private void AssertPdfsAreEqual(string srcPdf, int srcStartPage, int srcEndPage, string destPdf)
